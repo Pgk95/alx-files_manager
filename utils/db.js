@@ -2,46 +2,45 @@ const { MongoClient } = require('mongodb');
 
 class DBClient {
   constructor() {
-    this.db = null;
-    const host = process.env.DB_HOST || 'localhost';
-    const port = process.env.DB_PORT || '27017';
-    const database = process.env.DB_DATABASE || 'files_manager';
+    this.host = process.env.DB_HOST || 'localhost';
+    this.port = process.env.DB_PORT || 27017;
+    this.database = process.env.DB_DATABASE || 'files_manager';
+    this.url = `mongodb://${this.host}:${this.port}`;
+    this.client = new MongoClient(this.url, { useUnifiedTopology: true });
 
-    const url = `mongodb://${host}:${port}/${database}`;
-
-    this.client = new MongoClient(url, { useNewUrlParser: true, useUnifiedTopology: true });
-    this.client.connect()
-      .then(() => {
-        console.log(`DBClient connected to ${host}:${port}`);
-      })
-      .catch((err) => {
-        console.error(`MongoDB connection error: ${err}`);
-      });
+    this.client.connect((err) => {
+      if (err) {
+        console.error(err);
+        this.db = false;
+      } else {
+        console.log('Connected to MongoDB');
+      }
+    });
   }
 
   isAlive() {
-    return this.client.topology.isConnected();
+    return this.client.isConnected();
   }
 
   async nbUsers() {
     try {
-      const usersCollection = this.client.db().collection('users');
-      const count = await usersCollection.countDocuments();
-      return count;
-    } catch (err) {
-      console.log(`Error counting users: ${err}`);
-      throw err;
+      const db = this.client.db(this.database);
+      const usersCount = await db.collection('users').countDocuments();
+      return usersCount;
+    } catch (error) {
+      console.error(`Error getting nbUsers from MongoDB: ${error}`);
+      throw error;
     }
   }
 
   async nbFiles() {
     try {
-      const filesCollection = this.client.db().collection('files');
-      const count = await filesCollection.countDocuments();
-      return count;
-    } catch (err) {
-      console.log(`Error counting files: ${err}`);
-      throw err;
+      const db = this.client.db(this.database);
+      const filesCount = await db.collection('files').countDocuments();
+      return filesCount;
+    } catch (error) {
+      console.error(`Error getting nbFiles from MongoDB: ${error}`);
+      throw error;
     }
   }
 }
