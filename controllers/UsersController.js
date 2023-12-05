@@ -1,52 +1,62 @@
-// controllers/UsersController.js
-import { hash } from 'bcrypt';
-import { ObjectId } from 'mongodb';
+import sha1 from 'sha1';
+import { ObjectID } from 'mongodb';
 import dbClient from '../utils/db';
+import redisClient from '../utils/redis';
 
 class UsersController {
-  static async postNew(req, res) {
-    const { email, password } = req.body;
+  static postNew(request, response) {
+    const { email } = request.body;
+    const { password } = request.body;
 
-    // Check if email and password are provided
     if (!email) {
-      return res.status(400).json({ error: 'Missing email' });
+      response.status(400).json({ error: 'Missing email' });
+      return;
     }
-
     if (!password) {
-      return res.status(400).json({ error: 'Missing password' });
+      response.status(400).json({ error: 'Missing password' });
+      return;
     }
 
-    try {
-      // Check if the email already exists in the database
-      const existingUser = await dbClient.db.collection('users').findOne({ email });
-      if (existingUser) {
-        return res.status(400).json({ error: 'Already exists' });
+    const users = dbClient.db.collection('users');
+    users.findOne({ email }, (err, user) => {
+      if (user) {
+        response.status(400).json({ error: 'Already exist' });
+      } else {
+        const hashedPassword = sha1(password);
+        users
+          .insertOne({
+            email,
+            password: hashedPassword,
+          })
+          .then((result) => {
+            response.status(201).json({
+              id: result.ops[0]._id,
+              email,
+            });
+          })
+          .catch((error) => console.log(error));
       }
+    });
+  }
 
-      // Hash the password using bcrypt
-      const hashedPassword = await hash(password, 10);
-
-      // Create the new user document
-      const newUser = {
-        email,
-        password: hashedPassword,
-      };
-
-      // Insert the new user into the users collection
-      const result = await dbClient.db.collection('users').insertOne(newUser);
-
-      // Return the newly created user with only email and id
-      const insertedUser = {
-        id: result.insertedId,
-        email,
-      };
-
-      return res.status(201).json(insertedUser);
-    } catch (error) {
-      console.error(`Error creating user: ${error}`);
-      return res.status(500).json({ error: 'Internal server error' });
+  static async getMe(request, response) {
+    const token = request.header('X-Token');
+    const key = `auth_${token}`;
+    const userId = await redisClient.get(key);
+    if (userId) {
+      const users = dbClient.db.collection('users');
+      const idObject = new ObjectID(userId);
+      users.findOne({ _id: idObject }, (err, user) => {
+        if (user) {
+          response.status(200).json({ id: userId, email: user.email });
+        } else {
+          response.status(401).json({ error: 'Unauthorized' });
+        }
+      });
+    } else {
+      response.status(401).json({ error: 'Unauthorized' });
     }
   }
 }
 
-export default UsersController;
+module.exports = UsersController;
