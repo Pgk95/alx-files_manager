@@ -139,6 +139,43 @@ class FilesController {
       return res.status(500).json({ error: 'Internal Server Error' });
     }
   }
+
+  // eslint-disable-next-line consistent-return
+  static async getIndex(req, res) {
+    const token = req.header['X-Token'];
+    const parentId = req.query.parentId || 0;
+    const page = parseInt(req.query.page, 10) || 0;
+    const pageSize = 20;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      // Retrieve the user based on the token
+      const userId = await redisClient.get(`auth_${token}`);
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // MongoDB aggregation to handle pagination and retirve the files
+      const files = await dbClient.client
+        .db(dbClient.database)
+        .collection('files')
+        .aggregate([
+          { $match: { parentId } },
+          { $skip: page * pageSize },
+          { $limit: pageSize },
+        ])
+        .toArray();
+
+      res.status(200).json(files);
+    } catch (error) {
+      console.error(`Error getting file: ${error}`);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
 }
 
 module.exports = FilesController;
