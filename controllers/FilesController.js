@@ -176,6 +176,76 @@ class FilesController {
       return res.status(500).json({ error: 'Internal Server Error' });
     }
   }
+
+  // eslint-disable-next-line consistent-return
+  static async putPublish(req, res) {
+    const token = req.header['X-Token'];
+    const fileId = req.params.id;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      // Retrieve the user based on the token
+      const userId = await redisClient.get(`auth_${token}`);
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Retrieve and update the file based on the ID and user ID
+      const file = await dbClient.client.db(dbClient.database).collection('files').findOneAndUpdate(
+        { _id: fileId, userId },
+        { $set: { isPublic: true } },
+        { returnDocument: 'after' },
+      );
+
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      res.status(200).json(file.value);
+    } catch (error) {
+      console.error(`Error publishing file: ${error}`);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  // eslint-disable-next-line consistent-return
+  static async putUnpublish(req, res) {
+    const token = req.header['X-Token'];
+    const fileId = req.params.id;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      // Retrieve the user based on the token
+      const userId = await redisClient.get(`auth_${token}`);
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Retrieve and update the file based on the ID and user ID
+      const file = await dbClient.client.db(dbClient.database).collection('files').findOneAndUpdate(
+        { _id: fileId, userId },
+        { $set: { isPublic: false } },
+        { returnDocument: 'after' },
+      );
+
+      if (!file.value) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      res.status(200).json(file.value);
+    } catch (error) {
+      console.error(`Error publishing file: ${error}`);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
 }
 
 module.exports = FilesController;
