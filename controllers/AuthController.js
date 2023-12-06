@@ -1,13 +1,14 @@
 /* eslint-disable no-unused-vars */
 const { response } = require('express');
 const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const redisClient = require('../utils/redis');
 const dbClient = require('../utils/db');
 
 class AuthController {
   // eslint-disable-next-line consistent-return
   static async getConnect(req, res) {
-    const authHeader = req.header.authorization;
+    const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Basic ')) {
       return res.status(401).json({ error: 'Unauthorized' });
