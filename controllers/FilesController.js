@@ -3,6 +3,8 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 // eslint-disable-next-line no-unused-vars
 const { response } = require('express');
+// eslint-disable-next-line no-unused-vars
+const mime = require('mime-types');
 const redisClient = require('../utils/redis');
 const dbClient = require('../utils/db');
 
@@ -243,6 +245,51 @@ class FilesController {
       res.status(200).json(file.value);
     } catch (error) {
       console.error(`Error publishing file: ${error}`);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  static async getFile(req, res) {
+    const token = req.header('X-Token');
+    const { id } = req.params;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      // Retrieve the user based on the token
+      const userId = await redisClient.get(`auth_${token}`);
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Retrieve the file with the id
+      const file = await dbClient.client.db(dbClient.database).collection('files').findOne({ _id: id });
+
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      if (file.userId !== userId && !file.isPublic) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Return the file with a 200 HTTP code
+      const fileObject = {
+        id: file._id,
+        userId: file.userId,
+        name: file.name,
+        type: file.type,
+        isPublic: file.isPublic,
+        parentId: file.parentId,
+        data: file.localPath ? Buffer.from(fs.readFileSync(file.localPath)).toString('base64') : null,
+      };
+
+      return res.status(200).json(fileObject);
+    } catch (error) {
+      console.error(`Error getting file: ${error}`);
       return res.status(500).json({ error: 'Internal Server Error' });
     }
   }
