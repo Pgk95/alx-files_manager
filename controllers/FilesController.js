@@ -7,6 +7,7 @@ const { response } = require('express');
 const mime = require('mime-types');
 const redisClient = require('../utils/redis');
 const dbClient = require('../utils/db');
+const { fileQueue } = require('../worker');
 
 class FilesController {
   static async postUpload(req, res) {
@@ -31,7 +32,7 @@ class FilesController {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      // validate imputs
+      // validate inputs
       if (!name) {
         return res.status(400).json({ error: 'Missing name' });
       }
@@ -42,6 +43,11 @@ class FilesController {
 
       if ((type === 'file' || type === 'image') && !data) {
         return res.status(400).json({ error: 'Missing data' });
+      }
+
+      if (type === 'image') {
+        // eslint-disable-next-line no-unused-vars
+        const job = await fileQueue.add({ userId, fileId: data });
       }
 
       // validate parentId
@@ -97,6 +103,8 @@ class FilesController {
       console.error(`Error uploading file: ${error}`);
       return res.status(500).json({ error: 'Internal Server Error' });
     }
+
+    // Assuming 'type' is part of the request body
   }
 
   static async getShow(req, res) {
@@ -252,7 +260,16 @@ class FilesController {
   static async getFile(req, res) {
     const token = req.header('X-Token');
     const { id } = req.params;
+    const { size } = req.query;
 
+    if (size && (size === '500' || size === '250' || size === '100')) {
+      // Assuming fileId is part of the request parameters
+      const fileId = req.params.id;
+
+      // Redirect to the correct local file based on the size
+      const filePath = `/path/to/your/storage/${fileId}_${size}.jpg`; // Update with your storage path
+      return res.sendFile(filePath);
+    }
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
